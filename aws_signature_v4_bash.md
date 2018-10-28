@@ -20,37 +20,37 @@ The script has two dependencies and 3 parts.
 - Parameter parsing
 This is a standard thing. Not much to explain here but it’s needed to make the script reusable:
 ```bash
-	POSITIONAL=()
+POSITIONAL=()
 while [[ $# -gt 0 ]]
 do
-key="$1"
+	key="$1"
 
-case $key in
--f|--file-name)
-FILE_NAME="$2"
-shift # past argument
-shift # past value
-;;
--u|--file-to-upload)
-FILE_TO_UPLOAD="$2"
-shift # past argument
-shift # past value
-;;
--a|--access-key)
-ACCESS_KEY="$2"
-shift # past argument
-shift # past value
-;;
--s|--secret-access-key)
-SECRET_ACCESS_KEY="$2"
-shift # past argument
-shift # past value
-;;
-*)    # unknown option
-POSITIONAL+=("$1") # save it in an array for later
-shift # past argument
-;;
-esac
+	case $key in
+		-f|--file-name)
+			FILE_NAME="$2"
+			shift # past argument
+			shift # past value
+		;;
+		-u|--file-to-upload)
+			FILE_TO_UPLOAD="$2"
+			shift # past argument
+			shift # past value
+		;;
+		-a|--access-key)
+			ACCESS_KEY="$2"
+			shift # past argument
+			shift # past value
+		;;
+		-s|--secret-access-key)
+			SECRET_ACCESS_KEY="$2"
+			shift # past argument
+			shift # past value
+		;;
+		*)    # unknown option
+			POSITIONAL+=("$1") # save it in an array for later
+			shift # past argument
+		;;
+	esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
 ```
@@ -59,26 +59,26 @@ There are for variables set here setting the name of the file to upload, how it 
 - Helper functions for encrypting components of the request
 ```bash
 sha256_hash(){
- a="$@"
- printf "$a" | openssl dgst -binary -sha256
+	a="$@"
+	printf "$a" | openssl dgst -binary -sha256
 }
 sha256_hash_in_hex(){
- a="$@"
- printf "$a" | openssl dgst -binary -sha256 | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//'
+	a="$@"
+	printf "$a" | openssl dgst -binary -sha256 | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//'
 }
 # adapted from: http://stackoverflow.com/questions/7285059/hmac-sha1-in-bash
 # and also this answer there: http://stackoverflow.com/a/22369607
 function hex_of_sha256_hmac_with_string_key_and_value {
- KEY=$1
- DATA="$2"
- shift 2
- printf "$DATA" | openssl dgst -binary -sha256 -hmac "$KEY" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//'
+	KEY=$1
+	DATA="$2"
+	shift 2
+	printf "$DATA" | openssl dgst -binary -sha256 -hmac "$KEY" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//'
 }
 function hex_of_sha256_hmac_with_hex_key_and_value {
- KEY="$1"
- DATA="$2"
- shift 2
- printf "$DATA" | openssl dgst -binary -sha256 -mac HMAC -macopt "hexkey:$KEY" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//'
+	KEY="$1"
+	DATA="$2"
+	shift 2
+	printf "$DATA" | openssl dgst -binary -sha256 -mac HMAC -macopt "hexkey:$KEY" | od -An -vtx1 | sed 's/[ \n]//g' | sed 'N;s/\n//'
 }
 #####################################################################################################################
 
@@ -86,11 +86,11 @@ echo $FILE_TO_UPLOAD
 
 unameOut="$(uname -s)"
 case "${unameOut}" in
-   Linux*)     FILE_SIZE=$(stat -c%s "$FILE_TO_UPLOAD");;
-   Darwin*)    FILE_SIZE=$(stat -f%z "$FILE_TO_UPLOAD");;
-   CYGWIN*)    FILE_SIZE="0";;
-   MINGW*)     FILE_SIZE="0";;
-   *)          FILE_SIZE="0"
+	Linux*)     FILE_SIZE=$(stat -c%s "$FILE_TO_UPLOAD");;
+	Darwin*)    FILE_SIZE=$(stat -f%z "$FILE_TO_UPLOAD");;
+	CYGWIN*)    FILE_SIZE="0";;
+	MINGW*)     FILE_SIZE="0";;
+	*)          FILE_SIZE="0"
 esac
 
 FILE_CONTENT="$(cat $FILE_TO_UPLOAD)"
@@ -122,31 +122,31 @@ CANONICAL_HEADER_NAMES="content-length;host;x-amz-content-sha256;x-amz-date;x-am
 SCOPE="${DATE}/${REGION_NAME}/${SERVICE_NAME}/aws4_request"
 
 function create_hashed_canonical_request() {
-   CANONICAL_REQUEST_CONTENT="${HTTP_METHOD}\n${CANONICAL_URI}\n${CANONICAL_QUERY_STRING}\n${CANONICAL_HEADERS}\n${CANONICAL_HEADER_NAMES}\n${CONTENT_HASH}"
+	CANONICAL_REQUEST_CONTENT="${HTTP_METHOD}\n${CANONICAL_URI}\n${CANONICAL_QUERY_STRING}\n${CANONICAL_HEADERS}\n${CANONICAL_HEADER_NAMES}\n${CONTENT_HASH}"
 
-   CANONICAL_REQUEST=$(sha256_hash_in_hex "${CANONICAL_REQUEST_CONTENT}")
+	CANONICAL_REQUEST=$(sha256_hash_in_hex "${CANONICAL_REQUEST_CONTENT}")
 
-   printf "$CANONICAL_REQUEST"
+	printf "$CANONICAL_REQUEST"
 }
 
 function create_string_to_sign() {
-   STRING_TO_SIGN="${SCHEME}-${ALGORITHM}\n${DATE_TIME}\n${SCOPE}\n$(create_hashed_canonical_request)"
+	STRING_TO_SIGN="${SCHEME}-${ALGORITHM}\n${DATE_TIME}\n${SCOPE}\n$(create_hashed_canonical_request)"
 
-   printf "$STRING_TO_SIGN"
+	printf "$STRING_TO_SIGN"
 }
 
 function sign() {
- DATE_HMAC=$(hex_of_sha256_hmac_with_string_key_and_value "AWS4${SECRET_ACCESS_KEY}" ${DATE})
- REGION_HMAC=$(hex_of_sha256_hmac_with_hex_key_and_value "${DATE_HMAC}" ${REGION_NAME})
- SERVICE_HMAC=$(hex_of_sha256_hmac_with_hex_key_and_value "${REGION_HMAC}" ${SERVICE_NAME})
- SIGNING_HMAC=$(hex_of_sha256_hmac_with_hex_key_and_value "${SERVICE_HMAC}" "aws4_request")
- SIGNATURE=$(hex_of_sha256_hmac_with_hex_key_and_value "${SIGNING_HMAC}" "$(create_string_to_sign)")
+	DATE_HMAC=$(hex_of_sha256_hmac_with_string_key_and_value "AWS4${SECRET_ACCESS_KEY}" ${DATE})
+	REGION_HMAC=$(hex_of_sha256_hmac_with_hex_key_and_value "${DATE_HMAC}" ${REGION_NAME})
+	SERVICE_HMAC=$(hex_of_sha256_hmac_with_hex_key_and_value "${REGION_HMAC}" ${SERVICE_NAME})
+	SIGNING_HMAC=$(hex_of_sha256_hmac_with_hex_key_and_value "${SERVICE_HMAC}" "aws4_request")
+	SIGNATURE=$(hex_of_sha256_hmac_with_hex_key_and_value "${SIGNING_HMAC}" "$(create_string_to_sign)")
 
- printf "${SIGNATURE}"
+	printf "${SIGNATURE}"
 }
 
 function create_authorization_header() {
- printf "${SCHEME}-${ALGORITHM} Credential=${ACCESS_KEY}/${SCOPE}, SignedHeaders=${CANONICAL_HEADER_NAMES}, Signature=$(sign)"
+	printf "${SCHEME}-${ALGORITHM} Credential=${ACCESS_KEY}/${SCOPE}, SignedHeaders=${CANONICAL_HEADER_NAMES}, Signature=$(sign)"
 }
 
 
